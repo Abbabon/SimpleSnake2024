@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -7,20 +5,27 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     [SerializeField] private GameObject _snakePartPrefab;
-    [SerializeField] private GameManager _gameManager;
     [SerializeField] private float _stepTimeout = 0.5f;
     
     private float _stepTimer = 0;
     private Vector3 _recentPlayerMovement;
-
     private List<GameObject> _snakeParts = new();
 
+    public static PlayerController Instance { get; private set; }
+    
     private void Awake()
     {
-        _gameManager = FindObjectOfType<GameManager>();
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    private void Start()
+    public void StartGameSession()
     {
         var initialSnakePart = Instantiate(_snakePartPrefab, Vector3.zero, Quaternion.identity);
         _snakeParts.Add(initialSnakePart);
@@ -28,6 +33,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (!GameManager.Instance.IsGameRunning) return;
+        
         var playerInput = GetInputOnUpdate();
         if (playerInput != Vector3.zero)
         {
@@ -41,13 +48,21 @@ public class PlayerController : MonoBehaviour
                 return;
 
             var newSnakeHeadPosition = _snakeParts.Last().transform.position + _recentPlayerMovement;
+            var contactedWall = GameManager.Instance.IsPositionOnWall(newSnakeHeadPosition);
+
+            if (contactedWall)
+            {
+                GameManager.Instance.GameOver();
+                return;
+            }
+            
             var newSnakeHead = Instantiate(_snakePartPrefab, newSnakeHeadPosition, Quaternion.identity);
             _snakeParts.Add(newSnakeHead);
             
-            var foundFood = _gameManager.IsThereFoodInPosition(newSnakeHead.transform.position);
+            var foundFood = GameManager.Instance.IsThereFoodInPosition(newSnakeHead.transform.position);
             if (foundFood)
             {
-                _gameManager.EatFood();
+                GameManager.Instance.EatFood();
             }
             if (!foundFood)
             {
@@ -81,5 +96,12 @@ public class PlayerController : MonoBehaviour
         }
 
         return movementDirection;
+    }
+    
+    public bool IsPositionOnSnake(Vector3 position)
+    {
+        return _snakeParts.Any(snakePart => 
+            Mathf.Approximately(snakePart.transform.position.x, position.x) &&
+            Mathf.Approximately(snakePart.transform.position.y, position.y));
     }
 }
